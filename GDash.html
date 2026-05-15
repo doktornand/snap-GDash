@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🌍 GDash Monitor</title>
+  <style>
+    /* ===== RESET & BASE ===== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0a0e17;
+      color: #e0e6f0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.5;
+      position: relative;
+    }
+
+    /* ===== BACKGROUND IMAGE WITH OVERLAY ===== */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><defs><radialGradient id="glow" cx="50%25" cy="50%25" r="50%25"><stop offset="0%25" style="stop-color:%2300d4aa;stop-opacity:0.4"/><stop offset="100%25" style="stop-color:%2300d4aa;stop-opacity:0"/></radialGradient></defs><rect fill="%230a0e17" width="1920" height="1080"/><g opacity="0.6"><circle fill="url(%23glow)" cx="200" cy="300" r="100"/><circle fill="url(%23glow)" cx="600" cy="250" r="80"/><circle fill="url(%23glow)" cx="950" cy="280" r="120"/><circle fill="url(%23glow)" cx="1400" cy="320" r="90"/><circle fill="url(%23glow)" cx="1700" cy="350" r="110"/><circle fill="url(%23glow)" cx="300" cy="650" r="70"/><circle fill="url(%23glow)" cx="1000" cy="600" r="85"/><circle fill="url(%23glow)" cx="1500" cy="650" r="95"/></g></svg>');
+      background-size: cover;
+      background-position: center;
+      opacity: 0.4;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ===== SSTV SCANLINES OVERLAY ===== */
+    body::after {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 2px,
+        transparent 4px
+      );
+      pointer-events: none;
+      z-index: 1;
+      animation: scanline-move 8s linear infinite;
+    }
+
+    @keyframes scanline-move {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 100vh; }
+    }
+
+    /* ===== CONTAINER PRINCIPAL ===== */
+    .app-container {
+      position: relative;
+      z-index: 10;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      text-align: center;
+      padding: 25px 20px 30px;
+      border-bottom: 1px solid rgba(100, 180, 255, 0.2);
+      margin-bottom: 25px;
+      background: linear-gradient(180deg, rgba(20,30,50,0.8) 0%, rgba(10,14,23,0.6) 100%);
+      border-radius: 0 0 20px 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+    }
+    header h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #64b4ff, #00d4aa, #64b4ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(100, 180, 255, 0.3);
+      animation: glow-pulse 3s ease-in-out infinite;
+    }
+    @keyframes glow-pulse {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.2); }
+    }
+    header .subtitle {
+      color: #8899b0;
+      font-size: 0.95rem;
+      margin-top: 8px;
+      font-weight: 300;
+    }
+    header .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 6px 16px;
+      background: rgba(0, 212, 170, 0.15);
+      border: 1px solid rgba(0, 212, 170, 0.4);
+      border-radius: 20px;
+      font-size: 0.85rem;
+      color: #00d4aa;
+    }
+    header .status::before {
+      content: "";
+      width: 8px; height: 8px;
+      background: #00d4aa;
+      border-radius: 50%;
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.8); }
+    }
+
+    /* ===== TABS NAVIGATION ===== */
+    .tabs-nav {
+      display: flex;
+      gap: 4px;
+      padding: 8px;
+      background: rgba(15, 25, 45, 0.9);
+      border-radius: 16px;
+      margin-bottom: 25px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(100, 180, 255, 0.15);
+    }
+    .tabs-nav::-webkit-scrollbar { display: none; }
+
+    .tab-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 14px 18px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .tab-btn::before {
+      content: "";
+      position: absolute;
+      top: 0; left: -100%;
+      width: 100%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(100,180,255,0.15), transparent);
+      transition: left 0.5s;
+    }
+    .tab-btn:hover::before { left: 100%; }
+    .tab-btn:hover {
+      color: #e0e6f0;
+      background: rgba(100, 180, 255, 0.12);
+      transform: translateY(-2px);
+    }
+    .tab-btn.active {
+      background: linear-gradient(135deg, rgba(100,180,255,0.3), rgba(0,212,170,0.2));
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 4px 20px rgba(100, 180, 255, 0.3),
+                  inset 0 1px 0 rgba(255,255,255,0.15);
+      transform: translateY(-1px);
+    }
+    .tab-btn .icon { font-size: 1.1rem; }
+
+    /* ===== CONTENT AREA ===== */
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.35s ease-out;
+    }
+    .tab-content.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ===== CARDS & DATA DISPLAY ===== */
+    .data-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 10px 5px;
+    }
+
+    .card {
+      background: linear-gradient(145deg, rgba(25,35,60,0.95), rgba(20,30,55,0.98));
+      border: 1px solid rgba(100, 180, 255, 0.2);
+      border-radius: 18px;
+      padding: 20px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #64b4ff, #00d4aa, #64b4ff);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: rgba(100, 180, 255, 0.4);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5),
+                  0 0 30px rgba(100, 180, 255, 0.15);
+    }
+    .card:hover::before { opacity: 1; }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px dashed rgba(100,180,255,0.3);
+    }
+    .card-title .badge {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 12px;
+      background: rgba(0,212,170,0.25);
+      color: #00d4aa;
+      font-weight: 600;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148,163,184,0.15);
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label {
+      color: #94a3b8;
+      font-weight: 500;
+      font-size: 0.95rem;
+    }
+    .stat-value {
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: #fff;
+      text-align: right;
+    }
+    .stat-value.highlight {
+      color: #64b4ff;
+      font-size: 1.3rem;
+      text-shadow: 0 0 15px rgba(100,180,255,0.5);
+    }
+    .stat-value.danger { color: #ff6b6b; }
+    .stat-value.success { color: #00d4aa; }
+    .stat-value.warning { color: #ffc107; }
+
+    /* ===== LIST ITEMS (conflicts, maritime) ===== */
+    .event-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 600px;
+      overflow-y: auto;
+      padding-right: 5px;
+    }
+    .event-list::-webkit-scrollbar { width: 6px; }
+    .event-list::-webkit-scrollbar-track { background: rgba(100,180,255,0.15); border-radius: 3px; }
+    .event-list::-webkit-scrollbar-thumb { background: rgba(100,180,255,0.4); border-radius: 3px; }
+
+    .event-item {
+      background: rgba(30,45,75,0.7);
+      border-left: 3px solid #64b4ff;
+      border-radius: 0 12px 12px 0;
+      padding: 14px 18px;
+      transition: all 0.25s;
+    }
+    .event-item:hover {
+      background: rgba(40,60,95,0.9);
+      transform: translateX(4px);
+      border-left-color: #00d4aa;
+    }
+    .event-item.severe { border-left-color: #ff6b6b; }
+    .event-item.moderate { border-left-color: #ffc107; }
+
+    .event-title {
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+      font-size: 1rem;
+    }
+    .event-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: #8899b0;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .event-meta span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .event-summary {
+      color: #b8c5d6;
+      font-size: 0.92rem;
+      line-height: 1.4;
+    }
+    .event-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: #64b4ff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .event-link:hover { color: #00d4aa; text-decoration: underline; }
+
+    /* ===== FLIGHTS SPECIFIC ===== */
+    .flight-highlight {
+      text-align: center;
+      padding: 25px;
+      background: linear-gradient(135deg, rgba(100,180,255,0.2), rgba(0,212,170,0.15));
+      border-radius: 16px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(100,180,255,0.3);
+    }
+    .flight-count {
+      font-size: 3.5rem;
+      font-weight: 900;
+      background: linear-gradient(90deg, #64b4ff, #00d4aa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      line-height: 1;
+      text-shadow: 0 0 40px rgba(100,180,255,0.5);
+      animation: number-glow 2s ease-in-out infinite alternate;
+    }
+    @keyframes number-glow {
+      from { filter: brightness(1); }
+      to { filter: brightness(1.3); }
+    }
+    .flight-label {
+      color: #94a3b8;
+      font-size: 1.1rem;
+      margin-top: 8px;
+      font-weight: 500;
+    }
+
+    .country-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .country-item {
+      background: rgba(35,50,80,0.8);
+      padding: 12px 15px;
+      border-radius: 10px;
+      text-align: center;
+      border: 1px solid rgba(100,180,255,0.2);
+    }
+    .country-name {
+      font-weight: 700;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+    .country-count {
+      color: #64b4ff;
+      font-weight: 800;
+      font-size: 1.1rem;
+      margin-top: 4px;
+    }
+
+    /* ===== LOADING & ERROR STATES ===== */
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #94a3b8;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid rgba(100,180,255,0.2);
+      border-top-color: #64b4ff;
+      border-radius: 50%;
+      margin: 0 auto 15px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      background: rgba(255,107,107,0.15);
+      border: 1px solid rgba(255,107,107,0.4);
+      color: #ff8e8e;
+      padding: 15px 20px;
+      border-radius: 12px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    .info-msg {
+      background: rgba(100,180,255,0.1);
+      border: 1px solid rgba(100,180,255,0.3);
+      color: #94c4ff;
+      padding: 15px 20px;
+      border-radius: 12px;
+      text-align: center;
+      font-weight: 500;
+    }
+
+    /* ===== FOOTER ===== */
+    footer {
+      text-align: center;
+      padding: 25px 20px 40px;
+      color: #64748b;
+      font-size: 0.85rem;
+      margin-top: 30px;
+      border-top: 1px solid rgba(100,180,255,0.2);
+      background: rgba(10,14,23,0.6);
+      border-radius: 20px 20px 0 0;
+      backdrop-filter: blur(10px);
+    }
+    footer a {
+      color: #64b4ff;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    footer a:hover { text-decoration: underline; }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      header h1 { font-size: 1.8rem; }
+      .tabs-nav { flex-wrap: wrap; }
+      .tab-btn { min-width: 100px; padding: 12px 10px; font-size: 0.85rem; }
+      .data-grid { grid-template-columns: 1fr; }
+      .flight-count { font-size: 2.8rem; }
+    }
+
+    /* ===== UTILITY CLASSES ===== */
+    .text-bold { font-weight: 800 !important; }
+    .text-cyan { color: #00d4aa !important; }
+    .text-blue { color: #64b4ff !important; }
+    .text-yellow { color: #ffc107 !important; }
+    .text-red { color: #ff6b6b !important; }
+    .mono { font-family: 'Consolas', 'Monaco', monospace; }
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- ===== HEADER ===== -->
+    <header>
+      <h1>🌍 GDASH MONITOR</h1>
+      <p class="subtitle">Veille multi-source temps réel • Données agrégées</p>
+      <div class="status" id="connectionStatus">● Connecté à gdash.containers.snapdeploy.dev</div>
+    </header>
+
+    <!-- ===== TABS NAVIGATION ===== -->
+    <nav class="tabs-nav" role="tablist">
+      <button class="tab-btn active" data-tab="pandemic" role="tab" aria-selected="true">
+        <span class="icon">🦠</span> Pandémie
+      </button>
+      <button class="tab-btn" data-tab="conflicts" role="tab">
+        <span class="icon">⚔️</span> Conflits
+      </button>
+      <button class="tab-btn" data-tab="maritime" role="tab">
+        <span class="icon">🚢</span> Maritime
+      </button>
+      <button class="tab-btn" data-tab="flights" role="tab">
+        <span class="icon">✈️</span> Vols
+      </button>
+    </nav>
+
+    <!-- ===== TAB: PANDEMIC ===== -->
+    <section id="pandemic" class="tab-content active" role="tabpanel">
+      <div class="data-grid" id="pandemicContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des données pandémiques...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: CONFLICTS ===== -->
+    <section id="conflicts" class="tab-content" role="tabpanel">
+      <div class="data-grid" id="conflictsContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des alertes conflits...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: MARITIME ===== -->
+    <section id="maritime" class="tab-content" role="tabpanel">
+      <div class="data-grid" id="maritimeContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement des données maritimes...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TAB: FLIGHTS ===== -->
+    <section id="flights" class="tab-content" role="tabpanel">
+      <div class="data-grid" id="flightsContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Chargement du trafic aérien...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer>
+      <p>🔗 Source: <a href="https://gdash.containers.snapdeploy.dev" target="_blank">gdash.containers.snapdeploy.dev</a></p>
+      <p style="margin-top:8px">Dernière mise à jour: <span id="lastUpdate" class="text-bold text-cyan">--:--:--</span></p>
+    </footer>
+
+  </div>
+
+  <script>
+    // ===== CONFIGURATION =====
+    const API_BASE = 'https://gdash.containers.snapdeploy.dev';
+    const ENDPOINTS = {
+      pandemic: '/pandemic',
+      conflicts: '/conflicts',
+      maritime: '/maritime',
+      flights: '/flights'
+    };
+    const REFRESH_INTERVALS = {
+      pandemic: 300000,   // 5 min
+      conflicts: 180000,  // 3 min
+      maritime: 300000,   // 5 min
+      flights: 60000      // 1 min
+    };
+
+    // ===== STATE MANAGEMENT =====
+    const state = {
+      currentTab: 'pandemic',
+      data: {},
+      lastFetch: {},
+      refreshTimers: {}
+    };
+
+    // ===== DOM ELEMENTS =====
+    const $ = (sel, ctx = document) => ctx.querySelector(sel);
+    const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+
+    // ===== UTILITY FUNCTIONS =====
+    const formatNumber = (num) => {
+      if (num === null || num === undefined) return 'N/A';
+      if (typeof num === 'number' && num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+      if (typeof num === 'number' && num >= 1000) return (num / 1000).toFixed(1) + 'k';
+      return num.toLocaleString();
+    };
+
+    const formatTime = (dateStr) => {
+      if (!dateStr) return 'N/A';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      } catch { return dateStr; }
+    };
+
+    const updateLastUpdate = () => {
+      const now = new Date();
+      $('#lastUpdate').textContent = now.toLocaleTimeString('fr-FR');
+    };
+
+    const setLoading = (containerId, loading = true) => {
+      const container = $(`#${containerId}`);
+      if (loading) {
+        container.innerHTML = `
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Chargement des données...</p>
+          </div>
+        `;
+      }
+    };
+
+    const setError = (containerId, message) => {
+      $(`#${containerId}`).innerHTML = `<div class="error-msg">⚠️ ${message}</div>`;
+    };
+
+    const setInfo = (containerId, message) => {
+      $(`#${containerId}`).innerHTML = `<div class="info-msg">ℹ️ ${message}</div>`;
+    };
+
+    // ===== DATA FETCHING =====
+    const fetchEndpoint = async (endpoint) => {
+      try {
+        const response = await fetch(`${API_BASE}${ENDPOINTS[endpoint]}`, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-store'
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (error) {
+        console.error(`Error fetching ${endpoint}:`, error);
+        throw error;
+      }
+    };
+
+    // ===== RENDER FUNCTIONS =====
+
+    // --- PANDEMIC ---
+    const renderPandemic = (data) => {
+      const stats = data?.global_covid_stats || {};
+      return `
+        <div class="card">
+          <div class="card-title">
+            📊 Statistiques Mondiales
+            <span class="badge">COVID-19</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Cas totaux</span>
+            <span class="stat-value highlight mono">${formatNumber(stats.cases)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Décès</span>
+            <span class="stat-value danger mono">${formatNumber(stats.deaths)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Rétablis</span>
+            <span class="stat-value success mono">${formatNumber(stats.recovered)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Cas actifs</span>
+            <span class="stat-value warning mono">${formatNumber(stats.active)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Nouveaux cas (24h)</span>
+            <span class="stat-value text-blue mono">${formatNumber(stats.today_cases)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Nouveaux décès (24h)</span>
+            <span class="stat-value text-red mono">${formatNumber(stats.today_deaths)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Cas critiques</span>
+            <span class="stat-value mono">${formatNumber(stats.critical)}</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">ℹ️ Informations</div>
+          <div class="stat-row">
+            <span class="stat-label">Source</span>
+            <span class="stat-value truncate">${data?.source || 'Inconnue'}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Dernière MAJ</span>
+            <span class="stat-value mono">${formatTime(data?.updated)}</span>
+          </div>
+        </div>
+      `;
+    };
+
+    // --- CONFLICTS (CORRIGÉ) ---
+    const renderConflicts = (data) => {
+      const events = data?.events || [];
+      if (events.length === 0) {
+        return `<div class="card"><p style="color:#94a3b8">Aucune alerte récente.</p></div>`;
+      }
+
+      // Helper function pour gérer la sévérité de manière sûre
+      const getSeverityLevel = (severity) => {
+        if (!severity) return 'unknown';
+        const sevStr = String(severity).toLowerCase().trim();
+        if (sevStr === 'red' || sevStr === 'severe') return 'severe';
+        if (sevStr === 'orange' || sevStr === 'moderate') return 'moderate';
+        if (sevStr === 'yellow' || sevStr === 'low') return 'low';
+        return 'unknown';
+      };
+
+      const getSeverityColor = (severity) => {
+        if (!severity) return 'cyan';
+        const sevStr = String(severity).toLowerCase().trim();
+        if (sevStr === 'red' || sevStr === 'severe') return 'red';
+        if (sevStr === 'orange' || sevStr === 'moderate') return 'yellow';
+        return 'cyan';
+      };
+
+      return `
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-title">
+            🚨 Alertes Actives
+            <span class="badge">${events.length} événement${events.length>1?'s':''}</span>
+          </div>
+          <div class="event-list">
+            ${events.slice(0, 10).map(event => {
+              const severityLevel = getSeverityLevel(event.severity);
+              const severityColor = getSeverityColor(event.severity);
+              const severityClass = severityLevel === 'severe' ? 'severe' : severityLevel === 'moderate' ? 'moderate' : '';
+
+              return `
+                <div class="event-item ${severityClass}">
+                  <div class="event-title text-bold">${event.title || 'Sans titre'}</div>
+                  <div class="event-meta">
+                    ${event.country ? `<span>📍 ${event.country}</span>` : ''}
+                    ${event.event_type ? `<span>🏷️ ${event.event_type}</span>` : ''}
+                    ${event.published ? `<span>🕐 ${formatTime(event.published)}</span>` : ''}
+                    ${event.severity ? `<span class="text-${severityColor}">● ${String(event.severity).toUpperCase()}</span>` : ''}
+                  </div>
+                  <p class="event-summary">${event.summary?.substring(0, 180) || ''}${(event.summary?.length || 0) > 180 ? '...' : ''}</p>
+                  ${event.link ? `<a href="${event.link}" target="_blank" class="event-link">🔗 Voir les détails</a>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    };
+
+    // --- MARITIME ---
+    const renderMaritime = (data) => {
+      const vessels = data?.vessel_updates || [];
+      const news = data?.naval_news || [];
+      return `
+        ${vessels.length > 0 ? `
+        <div class="card">
+          <div class="card-title">⚓ Mises à jour Navires</div>
+          <div class="event-list">
+            ${vessels.slice(0, 8).map(v => `
+              <div class="event-item">
+                <div class="event-title text-bold truncate">${v.title || 'Navire'}</div>
+                <div class="event-meta">
+                  ${v.vessel_type ? `<span>🚢 ${v.vessel_type}</span>` : ''}
+                  ${v.position ? `<span>📍 ${v.position}</span>` : ''}
+                </div>
+                ${v.link ? `<a href="${v.link}" target="_blank" class="event-link">🔗 Détails</a>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
+
+        ${news.length > 0 ? `
+        <div class="card">
+          <div class="card-title">📰 Actualités Navales</div>
+          <div class="event-list">
+            ${news.slice(0, 8).map(n => `
+              <div class="event-item">
+                <div class="event-title text-bold truncate">${n.title || 'Actualité'}</div>
+                ${n.summary ? `<p class="event-summary">${n.summary.substring(0, 150)}${n.summary.length>150?'...':''}</p>` : ''}
+                ${n.link ? `<a href="${n.link}" target="_blank" class="event-link">🔗 Lire</a>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>` : ''}
+
+        ${vessels.length === 0 && news.length === 0 ?
+          `<div class="card"><p style="color:#94a3b8">Aucune donnée maritime disponible.</p></div>` : ''}
+      `;
+    };
+
+    // --- FLIGHTS ---
+    const renderFlights = (data) => {
+      const total = data?.total_aircraft_worldwide || 0;
+      const countries = data?.top_countries || [];
+      const highAlt = data?.top5_altitude || [];
+
+      // Si aucune donnée de vol disponible
+      if (total === 0 && countries.length === 0 && highAlt.length === 0) {
+        return `
+          <div class="card" style="grid-column: 1 / -1;">
+            <div class="info-msg">
+              ✈️ Données de vol temporairement indisponibles<br>
+              <small style="margin-top:8px;display:block;opacity:0.8">
+                Le serveur peut nécessiter une clé API ou être en maintenance
+              </small>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="flight-highlight">
+            <div class="flight-count mono">${formatNumber(total)}</div>
+            <div class="flight-label">✈️ Avions en vol dans le monde</div>
+          </div>
+
+          ${countries.length > 0 ? `
+          <div style="margin-top: 20px;">
+            <div class="card-title" style="border:none;padding-bottom:0;margin-bottom:12px;">
+              🌍 Top Pays par Trafic
+            </div>
+            <div class="country-grid">
+              ${countries.slice(0, 6).map((c, i) => `
+                <div class="country-item">
+                  <div class="country-name">${c.country || 'Inconnu'}</div>
+                  <div class="country-count mono">${formatNumber(c.count)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>` : ''}
+
+          ${highAlt.length > 0 ? `
+          <div style="margin-top: 20px;">
+            <div class="card-title" style="border:none;padding-bottom:0;margin-bottom:12px;">
+              🚀 Vols Haute Altitude
+            </div>
+            <div class="event-list">
+              ${highAlt.slice(0, 5).map(f => `
+                <div class="event-item">
+                  <div class="event-title text-bold">${f.callsign || 'Vol inconnu'}</div>
+                  <div class="event-meta">
+                    ${f.country ? `<span>📍 ${f.country}</span>` : ''}
+                    <span>📏 ${(f.altitude_m/1000).toFixed(1)} km</span>
+                    <span>⚡ ${f.velocity_ms ? Math.round(f.velocity_ms*3.6) : '?'} km/h</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>` : ''}
+        </div>
+      `;
+    };
+
+    // ===== MAIN FETCH & RENDER LOGIC =====
+    const fetchDataAndRender = async (endpoint) => {
+      const containerId = `${endpoint}Content`;
+      setLoading(containerId, true);
+
+      try {
+        const data = await fetchEndpoint(endpoint);
+        state.data[endpoint] = data;
+        state.lastFetch[endpoint] = Date.now();
+
+        let html = '';
+        switch(endpoint) {
+          case 'pandemic': html = renderPandemic(data); break;
+          case 'conflicts': html = renderConflicts(data); break;
+          case 'maritime': html = renderMaritime(data); break;
+          case 'flights': html = renderFlights(data); break;
+        }
+        $(`#${containerId}`).innerHTML = html;
+        updateLastUpdate();
+
+      } catch (error) {
+        setError(containerId, `Impossible de charger les données: ${error.message}`);
+      }
+    };
+
+    // ===== TAB SWITCHING =====
+    const switchTab = (tabId) => {
+      // Update UI
+      $$('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+        btn.setAttribute('aria-selected', btn.dataset.tab === tabId);
+      });
+      $$('.tab-content').forEach(content => {
+        content.classList.toggle('active', content.id === tabId);
+      });
+
+      state.currentTab = tabId;
+
+      // Fetch if needed
+      const now = Date.now();
+      const last = state.lastFetch[tabId] || 0;
+      const interval = REFRESH_INTERVALS[tabId] || 300000;
+
+      if (now - last > interval || !state.data[tabId]) {
+        fetchDataAndRender(tabId);
+      }
+    };
+
+    // ===== AUTO-REFRESH SYSTEM =====
+    const startAutoRefresh = (endpoint) => {
+      if (state.refreshTimers[endpoint]) {
+        clearInterval(state.refreshTimers[endpoint]);
+      }
+      state.refreshTimers[endpoint] = setInterval(() => {
+        if (state.currentTab === endpoint) {
+          fetchDataAndRender(endpoint);
+        }
+      }, REFRESH_INTERVALS[endpoint]);
+    };
+
+    // ===== INITIALIZATION =====
+    const init = () => {
+      // Tab click handlers
+      $$('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
+
+      // Keyboard navigation
+      document.addEventListener('keydown', (e) => {
+        const tabs = ['pandemic', 'conflicts', 'maritime', 'flights'];
+        const idx = tabs.indexOf(state.currentTab);
+        if (e.key === 'ArrowRight') {
+          switchTab(tabs[(idx + 1) % tabs.length]);
+        } else if (e.key === 'ArrowLeft') {
+          switchTab(tabs[(idx - 1 + tabs.length) % tabs.length]);
+        }
+      });
+
+      // Initial fetch for all endpoints
+      Object.keys(ENDPOINTS).forEach(endpoint => {
+        fetchDataAndRender(endpoint);
+        startAutoRefresh(endpoint);
+      });
+
+      // Connection status check
+      const checkConnection = async () => {
+        try {
+          await fetch(`${API_BASE}/summary`, { method: 'HEAD', cache: 'no-store' });
+          $('#connectionStatus').innerHTML = '● <span class="text-success">En ligne</span>';
+        } catch {
+          $('#connectionStatus').innerHTML = '○ <span class="text-red">Déconnecté</span>';
+        }
+      };
+      checkConnection();
+      setInterval(checkConnection, 30000);
+
+      // Visibility API: pause refresh when tab is hidden
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          Object.values(state.refreshTimers).forEach(clearInterval);
+        } else {
+          Object.keys(ENDPOINTS).forEach(startAutoRefresh);
+          if (state.currentTab) fetchDataAndRender(state.currentTab);
+        }
+      });
+
+      console.log('🌍 GDash Client initialized • World map background active');
+    };
+
+    // Start when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
