@@ -1,0 +1,17 @@
+# GDash — dépendances Python
+# Générées depuis les imports de main_py38.py et ops_client3b.py
+
+# Framework API
+fastapi>=0.100.0,<1.0.0
+
+# Serveur ASGI
+uvicorn[standard]>=0.22.0
+
+# Client HTTP asynchrone (utilisé massivement dans main_py38.py)
+httpx>=0.24.0
+
+# Parsing de flux RSS/Atom (feedparser.parse() utilisé pour NOAA, GDACS, NavalNews, etc.)
+feedparser>=6.0.8
+
+# asyncio est inclus dans la stdlib Python 3.8 (pas à installer)
+# datetime, json, typing : idem stdlib

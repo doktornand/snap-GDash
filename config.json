@@ -1,0 +1,180 @@
+{
+  "client": {
+    "name": "GLOBE OPS CENTER",
+    "version": "1.0.0",
+    "subtitle": "SYSTÈME DE SURVEILLANCE MONDIAL — SOURCES OUVERTES",
+    "operator": "ADMIN",
+    "classification": "OPEN SOURCE INTELLIGENCE"
+  },
+  "server": {
+    "base_url": "http://localhost:8000",
+    "timeout_seconds": 15,
+    "retry_attempts": 3,
+    "retry_delay_seconds": 2
+  },
+  "refresh": {
+    "auto_refresh": true,
+    "interval_seconds": 60,
+    "stagger_modules": true,
+    "stagger_delay_ms": 200
+  },
+  "display": {
+    "theme": "dark_ops",
+    "color_scheme": {
+      "primary": "cyan",
+      "alert_critical": "red",
+      "alert_warning": "yellow",
+      "alert_normal": "green",
+      "header": "bright_cyan",
+      "border": "blue",
+      "dim": "grey50",
+      "highlight": "bright_white"
+    },
+    "date_format": "%d/%m/%Y %H:%M:%S UTC",
+    "max_items_per_panel": 5,
+    "show_timestamps": true,
+    "show_source_urls": false,
+    "animate_header": true,
+    "compact_mode": false
+  },
+  "layout": {
+    "columns": 3,
+    "show_status_bar": true,
+    "show_clock": true,
+    "show_uptime": true,
+    "panel_padding": 1
+  },
+  "modules": {
+    "weather": {
+      "enabled": true,
+      "label": "🌤  MÉTÉO LOCALE",
+      "endpoint": "/weather",
+      "priority": 1,
+      "alert_thresholds": {
+        "wind_kmh_warning": 50,
+        "wind_kmh_critical": 90,
+        "temperature_heat_warning": 35,
+        "temperature_cold_warning": -5
+      }
+    },
+    "weather_extremes": {
+      "enabled": true,
+      "label": "🌡  EXTRÊMES MONDIAUX",
+      "endpoint": "/weather/extremes",
+      "priority": 2
+    },
+    "weather_alerts": {
+      "enabled": true,
+      "label": "⚡ ALERTES MÉTÉO",
+      "endpoint": "/weather/alerts",
+      "priority": 1,
+      "show_severity": true
+    },
+    "seismic": {
+      "enabled": true,
+      "label": "🌍 ACTIVITÉ SISMIQUE",
+      "endpoint": "/seismic",
+      "priority": 1,
+      "alert_thresholds": {
+        "magnitude_warning": 5.0,
+        "magnitude_critical": 7.0
+      }
+    },
+    "volcanoes": {
+      "enabled": true,
+      "label": "🌋 VOLCANS",
+      "endpoint": "/volcanoes",
+      "priority": 2
+    },
+    "wildfires": {
+      "enabled": true,
+      "label": "🔥 INCENDIES ACTIFS",
+      "endpoint": "/wildfires",
+      "priority": 1
+    },
+    "ocean": {
+      "enabled": true,
+      "label": "🌊 DONNÉES OCÉANIQUES",
+      "endpoint": "/ocean",
+      "priority": 3
+    },
+    "aurora": {
+      "enabled": true,
+      "label": "🌌 AURORES BORÉALES",
+      "endpoint": "/aurora",
+      "priority": 3,
+      "alert_thresholds": {
+        "kp_warning": 4,
+        "kp_critical": 7
+      }
+    },
+    "flights": {
+      "enabled": true,
+      "label": "✈  TRAFIC AÉRIEN",
+      "endpoint": "/flights",
+      "priority": 2
+    },
+    "maritime": {
+      "enabled": true,
+      "label": "🚢 TRAFIC MARITIME",
+      "endpoint": "/maritime",
+      "priority": 3
+    },
+    "conflicts": {
+      "enabled": true,
+      "label": "⚠  CONFLITS & CATASTROPHES",
+      "endpoint": "/conflicts",
+      "priority": 1
+    },
+    "cyber": {
+      "enabled": true,
+      "label": "🔐 CYBERSÉCURITÉ",
+      "endpoint": "/cyber",
+      "priority": 1
+    },
+    "pandemic": {
+      "enabled": true,
+      "label": "🦠 DONNÉES SANITAIRES",
+      "endpoint": "/pandemic",
+      "priority": 2
+    },
+    "space": {
+      "enabled": true,
+      "label": "🛸 ESPACE",
+      "endpoint": "/space",
+      "priority": 2
+    },
+    "crypto": {
+      "enabled": true,
+      "label": "₿  CRYPTO-MONNAIES",
+      "endpoint": "/crypto",
+      "priority": 3
+    },
+    "markets": {
+      "enabled": true,
+      "label": "📈 MARCHÉS FINANCIERS",
+      "endpoint": "/markets",
+      "priority": 3
+    }
+  },
+  "alerts": {
+    "enabled": true,
+    "sound": false,
+    "flash_on_critical": true,
+    "log_to_file": true,
+    "log_file": "ops_alerts.log",
+    "notify_modules": ["seismic", "weather_alerts", "conflicts", "cyber", "wildfires"]
+  },
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "file": "ops_client.log",
+    "max_size_mb": 10,
+    "rotation": true
+  },
+  "summary_mode": {
+    "use_summary_endpoint": false,
+    "summary_endpoint": "/summary",
+    "fallback_to_individual": true
+  }
+}
