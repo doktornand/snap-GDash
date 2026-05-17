@@ -31,6 +31,8 @@
       padding: 1rem 0;
       border-bottom: 1px solid var(--border);
       margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
     header h1 { font-size: 1.5rem; font-weight: 600; }
     header .status {
@@ -46,6 +48,45 @@
       animation: pulse 2s infinite;
     }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+    /* API Selector Widget */
+    .api-selector {
+      padding: 0.5rem 1rem;
+      background: var(--card);
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .api-selector label { font-size: 0.85rem; color: var(--muted); }
+    .api-selector input {
+      flex: 1;
+      min-width: 200px;
+      padding: 0.25rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 0.85rem;
+    }
+    .api-selector button {
+      padding: 0.25rem 0.75rem;
+      background: var(--primary);
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: opacity 0.2s;
+    }
+    .api-selector button:hover { opacity: 0.9; }
+    .api-selector button.secondary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
 
     /* Tabs */
     .tabs {
@@ -92,6 +133,8 @@
       margin-bottom: 0.75rem;
       padding-bottom: 0.5rem;
       border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 0.5rem;
     }
     .card-title { font-weight: 600; font-size: 1.1rem; }
     .card-subtitle { font-size: 0.85rem; color: var(--muted); }
@@ -164,7 +207,8 @@
     @media (max-width: 768px) {
       .tabs { flex-direction: column; }
       .grid { grid-template-columns: 1fr; }
-      header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+      header { flex-direction: column; align-items: flex-start; }
+      .card-header { flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
@@ -172,10 +216,18 @@
   <header>
     <h1>🌍 Globe Dashboard</h1>
     <div class="status">
-      <span class="status-dot"></span>
-      <span id="lastUpdate">Dernière MAJ : —</span>
+      <span class="status-dot" id="apiStatusDot"></span>
+      <span id="apiStatusText">Vérification de l'API...</span>
     </div>
   </header>
+
+  <!-- API Selector Widget -->
+  <div class="api-selector">
+    <label for="apiUrl">🔗 Endpoint API :</label>
+    <input type="url" id="apiUrl" placeholder="https://..." />
+    <button onclick="saveApiUrl()">Appliquer</button>
+    <button class="secondary" onclick="resetApiUrl()">Reset</button>
+  </div>
 
   <!-- Navigation Tabs -->
   <nav class="tabs" role="tablist">
@@ -326,33 +378,56 @@
 
   <script>
     // ═══════════════════════════════════════════════════════
-    // CONFIGURATION
+    // CONFIGURATION — API PRODUCTION
     // ═══════════════════════════════════════════════════════
-    const API_BASE = localStorage.getItem('gdash_api') || 'http://localhost:8000';
+    const DEFAULT_API_BASE = 'https://gdash.containers.snapdeploy.dev';
+    let API_BASE = localStorage.getItem('gdash_api') || DEFAULT_API_BASE;
+
     const REFRESH_INTERVALS = {
       flights: 3 * 60 * 1000,    // ✈️ Vols : 3 minutes (demande utilisateur)
-      weather: 5 * 60 * 1000,    // 5 min
-      seismic: 2 * 60 * 1000,    // 2 min
-      crypto: 1 * 60 * 1000,     // 1 min
+      weather: 5 * 60 * 1000,
+      seismic: 2 * 60 * 1000,
+      crypto: 1 * 60 * 1000,
       pandemic: 10 * 60 * 1000,  // 10 min (délai HantaOSINT)
-      default: 5 * 60 * 1000     // 5 min par défaut
+      default: 5 * 60 * 1000
     };
+
+    // ═══════════════════════════════════════════════════════
+    // API SELECTOR WIDGET
+    // ═══════════════════════════════════════════════════════
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('apiUrl').value = API_BASE;
+    });
+
+    function saveApiUrl() {
+      const url = document.getElementById('apiUrl').value.trim();
+      if (url && url.startsWith('http')) {
+        localStorage.setItem('gdash_api', url);
+        API_BASE = url;
+        location.reload();
+      } else {
+        alert('Veuillez entrer une URL valide commençant par http:// ou https://');
+      }
+    }
+
+    function resetApiUrl() {
+      localStorage.removeItem('gdash_api');
+      API_BASE = DEFAULT_API_BASE;
+      location.reload();
+    }
 
     // ═══════════════════════════════════════════════════════
     // GESTION DES TABS
     // ═══════════════════════════════════════════════════════
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        // Désactiver tous les tabs
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
 
-        // Activer le tab sélectionné
         btn.classList.add('active');
         const tabId = btn.dataset.tab;
         document.getElementById(tabId).classList.add('active');
 
-        // Charger les données si premier accès
         if (!document.getElementById(`${tabId}Content`).dataset.loaded) {
           loadTabData(tabId);
         }
@@ -398,8 +473,34 @@
 
     function updateLastUpdate() {
       const now = new Date();
-      document.getElementById('lastUpdate').textContent =
-        `Dernière MAJ : ${now.toLocaleTimeString('fr-FR')}`;
+      const el = document.getElementById('lastUpdate');
+      if (el) {
+        el.textContent = `Dernière MAJ : ${now.toLocaleTimeString('fr-FR')}`;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // API HEALTH CHECK
+    // ═══════════════════════════════════════════════════════
+    async function checkAPIHealth() {
+      const dot = document.getElementById('apiStatusDot');
+      const text = document.getElementById('apiStatusText');
+      if (!dot || !text) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/`, { method: 'HEAD', mode: 'cors' });
+        if (res.ok) {
+          dot.style.background = 'var(--success)';
+          dot.style.animation = 'pulse 2s infinite';
+          text.textContent = `API connectée • ${new URL(API_BASE).hostname}`;
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (e) {
+        dot.style.background = 'var(--danger)';
+        dot.style.animation = 'none';
+        text.innerHTML = `API injoignable • <a href="${API_BASE}" target="_blank" style="color:var(--danger)">Vérifier</a>`;
+      }
     }
 
     // ═══════════════════════════════════════════════════════
@@ -434,8 +535,8 @@
           </div>
         </div>
         <p style="margin-top:1rem;font-size:0.9rem;color:var(--muted)">
-          📡 ${meta.data_sources_count || 17} sources de données •
-          Version ${meta.version || '2.0.0'} •
+          📡 ${meta.data_sources_count || 17} sources •
+          v${meta.version || '2.0.0'} •
           MAJ : ${formatTimestamp(meta.fetched_at)}
         </p>
       `;
@@ -445,8 +546,8 @@
       if (data.error) return `<div class="error">❌ ${data.error}</div>`;
 
       const current = data.current || {};
-      document.getElementById('weatherUpdated').textContent =
-        `MAJ : ${formatTimestamp(data.updated)}`;
+      const el = document.getElementById('weatherUpdated');
+      if (el) el.textContent = `MAJ : ${formatTimestamp(data.updated)}`;
 
       return `
         <div class="grid">
@@ -472,17 +573,17 @@
       `;
     }
 
-    // ✈️ RENDER FLIGHTS - avec indicateur de rafraîchissement
     function renderFlights(data, isRefreshing = false) {
       const container = document.getElementById('flightsContent');
       const refreshEl = document.getElementById('flightsRefresh');
 
-      // Mise à jour indicateur
-      if (isRefreshing) {
-        refreshEl.classList.add('refreshing');
-      } else {
-        refreshEl.classList.remove('refreshing');
-        refreshEl.textContent = `Rafraîchi : ${new Date().toLocaleTimeString('fr-FR')}`;
+      if (refreshEl) {
+        if (isRefreshing) {
+          refreshEl.classList.add('refreshing');
+        } else {
+          refreshEl.classList.remove('refreshing');
+          refreshEl.textContent = `Rafraîchi : ${new Date().toLocaleTimeString('fr-FR')}`;
+        }
       }
 
       if (data.error) {
@@ -492,13 +593,13 @@
 
       const sample = data.sample || [];
       if (sample.length === 0) {
-        container.innerHTML = '<p style="color:var(--muted)">Aucun vol avec callsign disponible pour l\'échantillon.</p>';
+        container.innerHTML = '<p style="color:var(--muted)">Aucun vol avec callsign disponible.</p>';
         return;
       }
 
       let html = `
         <p style="margin-bottom:0.5rem;color:var(--muted)">
-          ${data.total_aircraft || sample.length} aéronefs détectés • Échantillon des 20 premiers :
+          ${data.total_aircraft || sample.length} aéronefs • Échantillon :
         </p>
         <div style="max-height:400px;overflow-y:auto">
         <table>
@@ -506,9 +607,9 @@
             <tr>
               <th>Callsign</th>
               <th>Pays</th>
-              <th>Altitude (ft)</th>
-              <th>Vitesse (kt)</th>
-              <th>Cap (°)</th>
+              <th>Altitude</th>
+              <th>Vitesse</th>
+              <th>Cap</th>
             </tr>
           </thead>
           <tbody>
@@ -519,9 +620,9 @@
           <tr>
             <td><strong>${flight.callsign || 'N/A'}</strong></td>
             <td>${flight.origin_country || '—'}</td>
-            <td>${flight.altitude?.toFixed(0) || '—'}</td>
-            <td>${flight.velocity?.toFixed(0) || '—'}</td>
-            <td>${flight.heading?.toFixed(0) || '—'}</td>
+            <td>${flight.altitude?.toFixed(0) || '—'} ft</td>
+            <td>${flight.velocity?.toFixed(0) || '—'} kt</td>
+            <td>${flight.heading?.toFixed(0) || '—'}°</td>
           </tr>
         `;
       });
@@ -534,7 +635,9 @@
       const container = document.getElementById('pandemicContent');
       const refreshEl = document.getElementById('pandemicRefresh');
 
-      refreshEl.textContent = `MAJ : ${new Date().toLocaleTimeString('fr-FR')}`;
+      if (refreshEl) {
+        refreshEl.textContent = `MAJ : ${new Date().toLocaleTimeString('fr-FR')}`;
+      }
 
       if (data.error) {
         container.innerHTML = `<div class="error">❌ ${data.error}</div>`;
@@ -567,16 +670,14 @@
               </div>
             </div>
             <p style="margin-top:0.75rem;font-size:0.85rem;color:var(--muted)">
-              📅 Données MAJ : ${hanta.updated || '—'} •
-              ⏱️ Délai public : ~24h
+              📅 Données MAJ : ${hanta.updated || '—'} • ⏱️ Délai public : ~24h
             </p>
           </div>
         `;
 
-        // Top pays
         if (hanta.countries?.length > 0) {
           html += `
-            <h4 style="margin:1rem 0 0.5rem">🌍 Top 10 pays (clusters)</h4>
+            <h4 style="margin:1rem 0 0.5rem">🌍 Top 10 pays</h4>
             <table>
               <thead><tr><th>Pays</th><th>Cas</th><th>Décès</th><th>Taux</th></tr></thead>
               <tbody>
@@ -597,7 +698,6 @@
           html += `</tbody></table>`;
         }
 
-        // Brèves récentes
         if (hanta.briefs?.length > 0) {
           html += `
             <h4 style="margin:1rem 0 0.5rem">📰 Brèves sanitaires</h4>
@@ -612,14 +712,14 @@
         html += `<div class="error">⚠️ HantaOSINT : ${results.hantaosint_error}</div>`;
       }
 
-      // === Section COVID disease.sh (fallback) ===
+      // === Section COVID disease.sh ===
       if (results.covid_realtime && !results.covid_error) {
         const covid = results.covid_realtime;
         const g = covid.global_stats || {};
 
         html += `
           <div style="margin-top:1.5rem;padding:1rem;background:rgba(59,130,246,0.1);border-radius:6px">
-            <h4 style="margin-bottom:0.75rem">🦠 COVID-19 — Données temps réel (disease.sh)</h4>
+            <h4 style="margin-bottom:0.75rem">🦠 COVID-19 — Données temps réel</h4>
             <div class="grid">
               <div class="stat">
                 <div class="stat-value">${g.cases?.toLocaleString('fr-FR') || '—'}</div>
@@ -635,11 +735,11 @@
               </div>
               <div class="stat">
                 <div class="stat-value">${g.today_cases?.toLocaleString('fr-FR') || '—'}</div>
-                <div class="stat-label">Nouveaux cas (24h)</div>
+                <div class="stat-label">Nouveaux (24h)</div>
               </div>
             </div>
             <p style="margin-top:0.75rem;font-size:0.85rem;color:var(--muted)">
-              📡 Source : ${covid.source} • MAJ : ${formatTimestamp(covid.updated)}
+              📡 ${covid.source} • MAJ : ${formatTimestamp(covid.updated)}
             </p>
           </div>
         `;
@@ -647,7 +747,6 @@
         html += `<div class="error">⚠️ disease.sh : ${results.covid_error}</div>`;
       }
 
-      // Disclaimer
       html += `<p style="margin-top:1rem;font-size:0.8rem;color:var(--muted);font-style:italic">
         ${data.disclaimer || 'Données à titre informatif uniquement.'}
       </p>`;
@@ -655,7 +754,6 @@
       container.innerHTML = html;
     }
 
-    // Renderers génériques pour les autres tabs
     function renderGenericList(data, containerId, itemRenderer) {
       const container = document.getElementById(containerId);
       if (data.error) {
@@ -685,6 +783,8 @@
     // ═══════════════════════════════════════════════════════
     async function loadTabData(tabId) {
       const contentEl = document.getElementById(`${tabId}Content`);
+      if (!contentEl) return;
+
       contentEl.dataset.loaded = 'true';
       contentEl.innerHTML = '<div class="loading">Chargement...</div>';
 
@@ -712,8 +812,7 @@
             data = await fetchAPI('/seismic');
             renderGenericList(data, 'seismicContent',
               item => `🌍 <strong>M${item.magnitude}</strong> — ${item.location}<br/>
-                       <small>Prof: ${item.depth_km?.toFixed(1) || '—'}km • ${formatTimestamp(item.time)}</small>
-                       ${item.felt ? ` • 👥 ${item.felt} ressentis` : ''}`);
+                       <small>Prof: ${item.depth_km?.toFixed(1) || '—'}km • ${formatTimestamp(item.time)}</small>`);
             break;
           case 'conflicts':
             data = await fetchAPI('/conflicts');
@@ -758,7 +857,7 @@
             if (data.error) {
               document.getElementById('cryptoContent').innerHTML = `<div class="error">❌ ${data.error}</div>`;
             } else {
-              let html = '<table><thead><tr><th>Crypto</th><th>Prix USD</th><th>Δ 24h</th><th>Market Cap</th></tr></thead><tbody>';
+              let html = '<table><thead><tr><th>Crypto</th><th>Prix USD</th><th>Δ 24h</th></tr></thead><tbody>';
               Object.entries(data.prices || {}).forEach(([coin, info]) => {
                 const changeClass = (info.change_24h || 0) >= 0 ? 'color:var(--success)' : 'color:var(--danger)';
                 html += `
@@ -766,7 +865,6 @@
                     <td><strong>${coin.toUpperCase()}</strong></td>
                     <td>$${info.usd?.toLocaleString('fr-FR') || '—'}</td>
                     <td style="${changeClass}">${info.change_24h?.toFixed(2) || '—'}%</td>
-                    <td>$${(info.market_cap_usd / 1e9).toFixed(2)}B</td>
                   </tr>
                 `;
               });
@@ -778,32 +876,29 @@
             data = await fetchAPI('/cyber');
             renderGenericList(data, 'cyberContent',
               item => `<strong>${item.title}</strong><br/><small>${item.source} • ${item.published}</small><br/>
-                       <a href="${item.link}" target="_blank" style="color:var(--primary)">Lire l'alerte →</a>`);
+                       <a href="${item.link}" target="_blank" style="color:var(--primary)">Lire →</a>`);
             break;
           default:
             contentEl.innerHTML = '<p style="color:var(--muted)">Onglet en développement.</p>';
         }
         updateLastUpdate();
       } catch (err) {
-        contentEl.innerHTML = `<div class="error">❌ Erreur de chargement : ${err.message}</div>`;
+        contentEl.innerHTML = `<div class="error">❌ Erreur : ${err.message}</div>`;
       }
     }
 
     // ═══════════════════════════════════════════════════════
-    // AUTO-REFRESH SPÉCIFIQUE PAR TAB
+    // AUTO-REFRESH PAR TAB
     // ═══════════════════════════════════════════════════════
     const autoRefreshTimers = {};
 
     function startAutoRefresh(tabId, intervalMs) {
-      // Nettoyer timer existant
       if (autoRefreshTimers[tabId]) {
         clearInterval(autoRefreshTimers[tabId]);
       }
 
-      // Nouveau timer
       autoRefreshTimers[tabId] = setInterval(() => {
-        // Seulement rafraîchir si le tab est actif (visible)
-        if (document.getElementById(tabId).classList.contains('active')) {
+        if (document.getElementById(tabId)?.classList.contains('active')) {
           console.log(`🔄 Auto-refresh ${tabId}...`);
 
           if (tabId === 'flights') {
@@ -811,46 +906,38 @@
           } else if (tabId === 'pandemic') {
             fetchAPI('/pandemic').then(data => renderPandemic(data));
           } else {
-            loadTabData(tabId); // Recharge complète pour les autres
+            loadTabData(tabId);
           }
         }
       }, intervalMs);
 
-      console.log(`✅ Auto-refresh activé pour "${tabId}" : ${intervalMs/1000}s`);
+      console.log(`✅ Auto-refresh "${tabId}" : ${intervalMs/1000}s`);
     }
 
     // ═══════════════════════════════════════════════════════
     // INITIALISATION
     // ═══════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', () => {
-      // Charger l'onglet Résumé par défaut
+      // Charger l'onglet Résumé
       loadTabData('summary');
 
-      // ✈️ Activer auto-refresh pour l'onglet Vols : 3 minutes (180 000 ms)
+      // ✈️ Auto-refresh Vols : 3 minutes
       startAutoRefresh('flights', REFRESH_INTERVALS.flights);
 
-      // 🦠 Auto-refresh Pandemic : 10 minutes (respect du délai HantaOSINT)
+      // 🦠 Auto-refresh Pandemic : 10 minutes
       startAutoRefresh('pandemic', REFRESH_INTERVALS.pandemic);
 
-      // Rafraîchissement léger pour d'autres tabs si désiré
-      // startAutoRefresh('weather', REFRESH_INTERVALS.weather);
-      // startAutoRefresh('crypto', REFRESH_INTERVALS.crypto);
+      // Santé API : vérification initiale + périodique
+      checkAPIHealth();
+      setInterval(checkAPIHealth, 10000);
 
-      // Mise à jour timestamp global toutes les 30s
+      // Timestamp global
       setInterval(updateLastUpdate, 30000);
-
-      // Gestion de la visibilité de l'onglet (pause refresh si tab non visible)
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          // Pause optionnelle des refresh si page en arrière-plan
-          // Object.values(autoRefreshTimers).forEach(clearInterval);
-        }
-      });
 
       console.log('🌍 Globe Dashboard initialisé • API :', API_BASE);
     });
 
-    // Nettoyage à la fermeture de page
+    // Nettoyage
     window.addEventListener('beforeunload', () => {
       Object.values(autoRefreshTimers).forEach(clearInterval);
     });
